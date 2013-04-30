@@ -1,3 +1,9 @@
+*.pyc
+*.db
+*.db-journal
+*.txt
+
+
 *.py[cod]
 
 # C extensions
