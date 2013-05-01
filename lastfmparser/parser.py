@@ -12,11 +12,14 @@ class parser:
 
     def __init__(self, cachedir):
         self.cachedir = cachedir
-        if not os.path.exists(cachedir):
-            os.makedirs(cachedir)
-            os.makedirs(cachedir+"user cache")
-            os.makedirs(cachedir+"song cache")
-        if not os.path.exists(cachedir+"playcounts2.db"):
+        if not cachedir =="":
+            if not os.path.exists(cachedir):
+                os.makedirs(cachedir)
+            if not os.path.exists(cachedir+"user cache"):
+                os.makedirs(cachedir+"user cache")
+            if not os.path.exists(cachedir+"song cache"):
+                os.makedirs(cachedir+"song cache")
+        if not os.path.exists(cachedir+"playcounts.db"):
             self.sqlcreatedb()
         
 
@@ -88,7 +91,7 @@ class parser:
         return fans
 
     def sqlcreatedb(self):
-        connection = sqlite3.connect(self.cachedir+"playcounts2.db")
+        connection = sqlite3.connect(self.cachedir+"playcounts.db")
         cursor = connection.cursor()
         cursor.execute("CREATE TABLE testdb (id INTEGER PRIMARY KEY NOT NULL, artistone TEXT, trackone TEXT, artisttwo TEXT, tracktwo TEXT, tcount INTEGER)")
         connection.commit()
@@ -96,11 +99,11 @@ class parser:
         
 
     def sqlincrement(self, entry):
-        artist1 = entry[0]
-        track1 = entry[1]
-        artist2 = entry[2]
-        track2 = entry[3]
-        connection = sqlite3.connect(self.cachedir+"playcounts2.db")
+        artist1 = entry[0].strip('"')
+        track1 = entry[1].strip('"')
+        artist2 = entry[2].strip('"')
+        track2 = entry[3].strip('"')
+        connection = sqlite3.connect(self.cachedir+"playcounts.db")
         cursor = connection.cursor()
         cursor.execute("SELECT * FROM testdb where artistone='%s' AND trackone='%s' AND artisttwo='%s' AND tracktwo='%s'" %(artist1, track1, artist2, track2))
         rows = cursor.fetchall()
@@ -122,11 +125,13 @@ class parser:
         connection.close()
 
     def sqlgetcounts(self, _artist, _song):
-        trackname = _artist + ", " + _song
-        print trackname
-        connection = sqlite3.connect(self.cachedir+"playcounts2.db")
+        #trackname = _artist + ", " + _song
+        #print trackname
+        #_artist = '"'+_artist+'"'
+        #_song = '"'+_song+'"'
+        print _artist, _song
+        connection = sqlite3.connect(self.cachedir+"playcounts.db")
         cursor = connection.cursor()
-        #cursor.execute("SELECT * FROM testdb where trackone='%s' OR tracktwo='%s' ORDER BY tcount DESC" %(trackname, trackname))
         cursor.execute("""SELECT * FROM testdb where (artistone='%s' AND trackone='%s') OR (artisttwo='%s' AND tracktwo='%s')
                         ORDER BY tcount DESC""" %(_artist, _song, _artist, _song))
         rows = cursor.fetchall()
@@ -140,13 +145,13 @@ class parser:
         while i < (listencount-1):
             if recent[i][0].find(self._artist) > -1:
                 if recent[i+1][0].find(self._artist) > -1:
-                    song1 = (recent[i][0] + ", " + recent[i][1]).replace('"',"").replace("'","")
-                    artist1 = recent[i][0].replace('"',"").replace("'","")
-                    track1 = recent[i][1].replace('"',"").replace("'","")
+                    song1 = (recent[i][0] + ", " + recent[i][1]).replace("'","''")
+                    artist1 = recent[i][0].replace("'","''")
+                    track1 = recent[i][1].replace("'","''")
 
-                    song2 = (recent[i+1][0] + ", " + recent[i+1][1]).replace('"',"").replace("'","")
-                    artist2 = recent[i+1][0].replace('"',"").replace("'","")
-                    track2 = recent[i+1][1].replace('"',"").replace("'","")
+                    song2 = (recent[i+1][0] + ", " + recent[i+1][1]).replace("'","''")
+                    artist2 = recent[i+1][0].replace("'","''")
+                    track2 = recent[i+1][1].replace("'","''")
 
                     a = cmp(song1, song2)
                     if a < 0:
@@ -167,6 +172,7 @@ class parser:
         recent = []
         playcounts = {}
         for fn in allusers:
+            print "parsing user deets:",fn
             cache = open(fn)
             jsonResponse = json.loads(cache.read())
             cache.close()
@@ -184,8 +190,8 @@ class parser:
         self.sendtodb(recent)
 
     def dynamicplaylist(self, _artist, _song):
-        _artist = _artist.replace('"',"").replace("'","")
-        _song = _song.replace('"',"").replace("'","")
+        _artist = _artist.replace("'","''")
+        _song = _song.replace("'","''")
         self._artist = _artist
         self._song = _song
         fans = self.getsongfans(_artist, _song)
@@ -202,11 +208,11 @@ class parser:
         return npl
 
 if __name__ == "__main__":
-    _artist = "Lil B"
+    _artist = "Die Antwoord"
     _song = "Obama BasedGod"
-    np = parser()
+    np = parser("")
     #np.sqlcreatedb()
-    #np.parsecache(_artist)
+    np.parsecache(_artist)
     newplaylist = np.dynamicplaylist(_artist, _song)
     for item in newplaylist:
         print item[0],item[1]

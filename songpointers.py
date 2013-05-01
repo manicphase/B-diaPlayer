@@ -14,8 +14,10 @@ class SongPointers:
         connection.close()
 
     def addfile(self, artist, track, location):
-        artist = artist.replace("'","").replace('"',"")
-        track = track.replace("'","").replace('"',"")
+        artist = artist.replace("'","''")
+        track = track.replace("'","''")
+        location = location.replace("'","''")
+        print "adding pointer for:",artist, track
         connection = sqlite3.connect("songpointers.db")
         cursor = connection.cursor()
         cursor.execute("SELECT * FROM songs where location = '%s'" %location)
@@ -25,8 +27,8 @@ class SongPointers:
         connection.close()
 
     def getfile(self, artist, track):
-        artist = artist.replace("'","").replace('"',"")
-        track = track.replace("'","").replace('"',"")
+        artist = artist.replace("'","''")
+        track = track.replace("'","''")
         connection = sqlite3.connect("songpointers.db")
         cursor = connection.cursor()
         cursor.execute("SELECT * FROM songs where artist = '%s' AND track = '%s'" %(artist, track))

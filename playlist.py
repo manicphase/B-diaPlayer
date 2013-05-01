@@ -1,6 +1,6 @@
 #lil b'dia player version 0.1
 
-
+import sys
 import wx
 import wx.media
 import lastfmparser.parser
@@ -20,7 +20,7 @@ ID_DYNAMIC = 5
 class ListBox(wx.Frame):
     def __init__(self, parent, id, title):
         #lfm = lastfmparser.parser.parser()
-        wx.Frame.__init__(self, parent, id, title, size=(350,250))
+        wx.Frame.__init__(self, parent, id, title, size=(450,250))
 
         panel = wx.Panel(self, -1)
         hbox = wx.BoxSizer(wx.HORIZONTAL)
@@ -30,9 +30,11 @@ class ListBox(wx.Frame):
 
         self.playinglabel = wx.StaticText(panel, -1, "Not Playing")
         lbox.Add(self.playinglabel, 0, wx.TOP, 0)
-        self.listbox = wx.ListBox(panel, -1)
-        lbox.Add(self.listbox, 1, wx.EXPAND | wx.ALL, 5)
 
+        self.listctrl = wx.ListCtrl(panel, -1, style=wx.LC_REPORT)
+        self.listctrl.InsertColumn(0, 'Artist', width=100)
+        self.listctrl.InsertColumn(1, 'Song', 180)
+        lbox.Add(self.listctrl, 1, wx.EXPAND | wx.ALL, 5)
 
         btnPanel = wx.Panel(panel, -1)
         vbox = wx.BoxSizer(wx.VERTICAL)
@@ -47,7 +49,7 @@ class ListBox(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.OnOpen, id =ID_OPEN)
         self.Bind(wx.EVT_BUTTON, self.OnPlay, id =ID_PLAY)
         self.Bind(wx.EVT_BUTTON, self.ListLocal, id =ID_CLEAR)
-        self.Bind(wx.EVT_LISTBOX_DCLICK, self.ListDoubleClick)
+        self.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.ListDoubleClick)
 
         vbox.Add((-1, 25))
         vbox.Add(new)
@@ -81,7 +83,9 @@ class ListBox(wx.Frame):
             files = self.GetGlob(path)
             for f in files:
                 self.AddFilePointer(f)
-                self.listbox.Append(self.GetId3(f))
+                track = self.GetId3(f)
+                index = self.listctrl.InsertStringItem(sys.maxint, track[0])
+                self.listctrl.SetStringItem(index, 1, track[1])
         openDialog.Destroy()
 
     def OnPlay(self, event):
@@ -90,11 +94,12 @@ class ListBox(wx.Frame):
         if sel < 0:
             sel = 0
         path = ""
-        while sel < len(self.listbox.GetStrings()):
-            song = self.listbox.GetString(sel).split(",")            
-            self.playinglabel.SetLabel(("Now Playing: " + self.listbox.GetString(sel)))
-            artist = song[0]
-            track = song[1].strip()
+        while sel < self.listctrl.GetItemCount():
+            artist = self.listctrl.GetItem(self.currenttrack,0).GetText()
+            track = self.listctrl.GetItem(self.currenttrack,1).GetText()
+            label = "Now Playing: " + artist + ", " + track
+            print label
+            self.playinglabel.SetLabel(label)
             path = self.sp.getfile(artist, track)
             if len(path) > 1:
                 break
@@ -137,9 +142,8 @@ class ListBox(wx.Frame):
         #if self.mediaplayer.GetState() == 0:
         self.playing = False
         self.mp3loaded = False
-        song = self.listbox.GetString(0).split(",")
-        artist = song[0]
-        track = song[1].strip()
+        artist = self.listctrl.GetItem(self.currenttrack,0).GetText()
+        track = self.listctrl.GetItem(self.currenttrack,1).GetText()
         path = self.sp.getfile(artist, track)
         self.OnPlay(event)
         self.listbox.Delete(0)
@@ -165,7 +169,7 @@ class ListBox(wx.Frame):
         deets = id3reader.Reader(path)
         artist = deets.getValue("performer")
         track = deets.getValue("title")
-        s = artist+", "+track
+        s = [artist,track]
         return s
 
     def Start(self, event):
@@ -176,38 +180,48 @@ class ListBox(wx.Frame):
             playlist = self.lfm.dynamicplaylist(song[0], song[1].strip())
             self.listbox.Append(text)
             for item in playlist:
-                #ntext = str(item[0]) #str((str(item[0]), item[1]))
-                ntext = item[1]+ ", "+item[2]
-                self.listbox.Append(ntext)
+                index = self.listctrl.InsertStringItem(sys.maxint, item[0])
+                self.listctrl.SetStringItem(index, 1, item[1])
 
     def ListDoubleClick(self, event):
         self.mediaplayer.Stop()
         self.playing = False
         self.mp3loaded = False
-        self.currenttrack = self.listbox.GetSelection()
+        self.currenttrack = self.GetListCtrlRowNo()
         self.OnPlay(event)
         if self.dynamicpl.GetValue():
             self.FindSimilar(event)
-            
+
+    def GetListCtrlRowNo(self):
+        row = -1
+        items = []
+        while 1:
+            row = self.listctrl.GetNextItem(row, wx.LIST_NEXT_ALL, wx.LIST_STATE_SELECTED)
+            if row==-1:
+                break
+            items.append(row)
+        return items[0]
             
     def FindSimilar(self, event):
         #self.PauseFile()
-        sel = self.listbox.GetSelection()
-        if sel < 0:
-            sel = 0
-        text = self.listbox.GetString(sel).split(",")
-        self.listbox.Clear()
-        playlist = self.lfm.dynamicplaylist(text[0], text[1].strip())
+        artist = self.listctrl.GetItem(self.currenttrack,0).GetText()
+        track = self.listctrl.GetItem(self.currenttrack,1).GetText()
+        self.listctrl.ClearAll()
+        self.listctrl.InsertColumn(0, 'Artist', width=100)
+        self.listctrl.InsertColumn(1, 'Song', 90)
+        playlist = self.lfm.dynamicplaylist(artist, track)
         for item in playlist:
-            ntext = item[1]+ ", "+item[2] #str((str(item[0]), item[1]))
-            self.listbox.Append(ntext)
+            index = self.listctrl.InsertStringItem(sys.maxint, item[1])
+            self.listctrl.SetStringItem(index, 1, item[2])
+
 
 
     def ListLocal(self, event):
         allstuff = self.sp.getdb()
         for item in allstuff:
-            entry = item[0] + ", " + item[1]
-            self.listbox.Append(entry)
+            index = self.listctrl.InsertStringItem(sys.maxint, item[0])
+            self.listctrl.SetStringItem(index, 1, item[1])
+
 
 app = wx.App()
 ListBox(None, -1, "Lil B'dia Player")
