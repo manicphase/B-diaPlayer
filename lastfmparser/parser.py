@@ -178,7 +178,7 @@ class parser:
         cursor = connection.cursor()
         if _song[0] == _song[-1]:
             _song = _song.strip('"')
-        _song = _song.replace("''",'"')
+        _song = _song.replace("''","'")
         s_song = _song.replace("'","''")
         cursor.execute("SELECT * FROM songs where (song = '%s' AND artist='%s')"%(s_song, _artist))
         results = cursor.fetchall()
@@ -192,19 +192,20 @@ class parser:
             Response = urllib.urlopen(url)
             jsonResponse = json.loads(Response.read())
             try:
-                propertrack = jsonResponse["corrections"]["correction"]["track"]["name"]
+                propertrack = jsonResponse["corrections"]["correction"]["track"]["name"].replace("'","''")
             except:
-                propertrack = _song
-            cursor.execute("INSERT into songs VALUES(NULL, '%s', '%s', '%s')" %(s_song, _artist, propertrack))
+                propertrack = s_song
+            try:
+                cursor.execute("INSERT into songs VALUES(NULL, '%s', '%s', '%s')" %(s_song, _artist, propertrack))
+            except:
+                print "Error inserting line: INSERT into songs VALUES(NULL, '%s', '%s', '%s')" %(s_song, _artist, propertrack)
             connection.commit()
             connection.close()
             print "adding correction for "+_song+ ": "+propertrack
             return propertrack
 
     def sendtodb(self, recent):
-        print "before", self._artist
         self._artist = self.correctartist(self._artist)
-        print "after", self._artist
         listencount = len(recent)
         i = 0
         while i < (listencount-1):

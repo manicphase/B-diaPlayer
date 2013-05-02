@@ -82,7 +82,7 @@ class ListBox(wx.Frame):
             path = openDialog.GetPath()
             files = self.GetGlob(path)
             for f in files:
-                self.AddFilePointer(f)
+                #self.AddFilePointer(f)
                 track = self.GetId3(f)
                 index = self.listctrl.InsertStringItem(sys.maxint, track[0])
                 self.listctrl.SetStringItem(index, 1, track[1])
@@ -171,12 +171,17 @@ class ListBox(wx.Frame):
         files = glob.glob(path+"/*.mp3")
         return files
 
+    #def StripSongNumbers(self, songs):
+        
+
     def GetId3(self, path):
+        sp = songpointers.SongPointers()
         deets = id3reader.Reader(path)
         artist = deets.getValue("performer")
         artist = self.lfm.correctartist(artist)
         track = deets.getValue("title")
         track = self.lfm.correcttrack(artist, track)
+        sp.addfile(artist, track, path)        
         s = [artist,track]
         return s
 
