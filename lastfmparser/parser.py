@@ -2,6 +2,7 @@ import urllib, json
 import pprint
 import glob
 import os.path
+import time
 
 import sqlite3
 
@@ -69,8 +70,9 @@ class parser:
         return recent
 
     def getsongfans(self, artist, song):
+        cartist = self.correctartist(artist).replace('"','')
         try:
-            cache = open(self.cachedir+"song cache/%s - %s.txt" %(artist, song))
+            cache = open(self.cachedir+"song cache/%s - %s.txt" %(cartist, song))
             jsonResponse = json.loads(cache.read())
             cache.close()
         except:
@@ -78,7 +80,7 @@ class parser:
             Response = urllib.urlopen(url)
             jsonResponse = json.loads(Response.read())
             #jsonResponse = self.convert(jsonResponse)
-            with open(self.cachedir+"song cache/%s - %s.txt" %(artist, song),"w") as cache:
+            with open(self.cachedir+"song cache/%s - %s.txt" %(cartist, song),"w") as cache:
                 json.dump(jsonResponse, cache)
         fans = []
         #print jsonResponse
@@ -93,65 +95,132 @@ class parser:
     def sqlcreatedb(self):
         connection = sqlite3.connect(self.cachedir+"playcounts.db")
         cursor = connection.cursor()
-        cursor.execute("CREATE TABLE testdb (id INTEGER PRIMARY KEY NOT NULL, artistone TEXT, trackone TEXT, artisttwo TEXT, tracktwo TEXT, tcount INTEGER)")
+        #cursor.execute("CREATE TABLE plays (id INTEGER PRIMARY KEY NOT NULL, artistone TEXT, trackone TEXT, artisttwo TEXT, tracktwo TEXT, tcount INTEGER)")
+        #cursor.execute("CREATE TABLE alias (id INTEGER PRIMARY KEY NOT NULL, alias TEXT, proper TEXT)")
+        cursor.execute("CREATE TABLE songs (id INTEGER PRIMARY KEY NOT NULL, song TEXT, artist TEXT, proper TEXT)")
         connection.commit()
         connection.close()
         
 
     def sqlincrement(self, entry):
-        artist1 = entry[0].strip('"')
+        artist1 = self.correctartist(entry[0]).strip('"')
         track1 = entry[1].strip('"')
-        artist2 = entry[2].strip('"')
+        artist2 = self.correctartist(entry[2]).strip('"')
         track2 = entry[3].strip('"')
         connection = sqlite3.connect(self.cachedir+"playcounts.db")
         cursor = connection.cursor()
-        cursor.execute("SELECT * FROM testdb where artistone='%s' AND trackone='%s' AND artisttwo='%s' AND tracktwo='%s'" %(artist1, track1, artist2, track2))
+        cursor.execute("SELECT * FROM plays where artistone='%s' AND trackone='%s' AND artisttwo='%s' AND tracktwo='%s'" %(artist1, track1, artist2, track2))
         rows = cursor.fetchall()
         if len(rows) == 0:
             try:
-                cursor.execute("INSERT into testdb VALUES(NULL, '%s', '%s', '%s', '%s', 1)" %(artist1, track1, artist2, track2))
-                print "creating row:", artist1, track1, artist2, track2, "1"
+                cursor.execute("INSERT into plays VALUES(NULL, '%s', '%s', '%s', '%s', 1)" %(artist1, track1, artist2, track2))
+                #print "creating row:", artist1, track1, artist2, track2, "1"
             except:
                 print "ERROR while creating row:", artist1, track1, artist2, track2, "1"
         else:
         #try:
             index = rows[0][0]
             tcount = rows[0][5] + 1
-            cursor.execute("INSERT or REPLACE into testdb VALUES(%s,'%s','%s','%s','%s',%s)" %(index, artist1, track1, artist2, track2, tcount))
             print "updating row:", index, artist1, track1, artist2, track2, tcount
+            cursor.execute("INSERT or REPLACE into plays VALUES(%s,'%s','%s','%s','%s',%s)" %(index, artist1, track1, artist2, track2, tcount))
+            
             #except:
                 #print "Error Amending row: "+str(index), artist1, track1, artist2, track2, str(tcount)
         connection.commit()
         connection.close()
 
     def sqlgetcounts(self, _artist, _song):
-        #trackname = _artist + ", " + _song
-        #print trackname
-        #_artist = '"'+_artist+'"'
-        #_song = '"'+_song+'"'
+        #_artist = self.correctartist(_artist)
         print _artist, _song
         connection = sqlite3.connect(self.cachedir+"playcounts.db")
         cursor = connection.cursor()
-        cursor.execute("""SELECT * FROM testdb where (artistone='%s' AND trackone='%s') OR (artisttwo='%s' AND tracktwo='%s')
+        cursor.execute("""SELECT * FROM plays where (artistone='%s' AND trackone='%s') OR (artisttwo='%s' AND tracktwo='%s')
                         ORDER BY tcount DESC""" %(_artist, _song, _artist, _song))
         rows = cursor.fetchall()
         connection.commit()
         connection.close()
         return rows
 
+    def correctartist(self, _artist):
+        connection = sqlite3.connect(self.cachedir+"playcounts.db")
+        cursor = connection.cursor()
+        #cursor.execute("SELECT * FROM alias")
+        #print cursor.fetchall()
+        if _artist[0] == _artist[-1]:
+            _artist = _artist.strip('"')
+        _artist = _artist.replace("''",'"')
+        s_artist = _artist.replace("'","''")
+        cursor.execute("SELECT * FROM alias where (alias = '%s')"%s_artist)
+        results = cursor.fetchall()
+        if len(results) > 0:
+            connection.commit()
+            connection.close()
+            #print "results:",results
+            return results[0][2]
+        else:
+            #print "adding correction for "+_artist            
+            time.sleep(1)
+            url = """http://ws.audioscrobbler.com/2.0/?method=artist.getcorrection&artist=%s&api_key=%s&format=json""" %(_artist, self.apikey)
+            Response = urllib.urlopen(url)
+            jsonResponse = json.loads(Response.read())
+            try:
+                properartist = jsonResponse["corrections"]["correction"]["artist"]["name"]
+            except:
+                properartist = _artist
+            cursor.execute("INSERT into alias VALUES(NULL, '%s', '%s')" %(s_artist, properartist))
+            connection.commit()
+            connection.close()
+            print "adding correction for "+_artist+ ": "+properartist
+            return properartist
+
+    def correcttrack(self, _artist, _song):
+        connection = sqlite3.connect(self.cachedir+"playcounts.db")
+        cursor = connection.cursor()
+        if _song[0] == _song[-1]:
+            _song = _song.strip('"')
+        _song = _song.replace("''",'"')
+        s_song = _song.replace("'","''")
+        cursor.execute("SELECT * FROM songs where (song = '%s' AND artist='%s')"%(s_song, _artist))
+        results = cursor.fetchall()
+        if len(results) > 0:
+            connection.commit()
+            connection.close()
+            return results[0][3]
+        else:        
+            time.sleep(1)
+            url = """http://ws.audioscrobbler.com/2.0/?method=track.getcorrection&artist=%s&track='%s'&api_key=%s&format=json""" %(_artist, _song, self.apikey)
+            Response = urllib.urlopen(url)
+            jsonResponse = json.loads(Response.read())
+            try:
+                propertrack = jsonResponse["corrections"]["correction"]["track"]["name"]
+            except:
+                propertrack = _song
+            cursor.execute("INSERT into songs VALUES(NULL, '%s', '%s', '%s')" %(s_song, _artist, propertrack))
+            connection.commit()
+            connection.close()
+            print "adding correction for "+_song+ ": "+propertrack
+            return propertrack
+
     def sendtodb(self, recent):
+        print "before", self._artist
+        self._artist = self.correctartist(self._artist)
+        print "after", self._artist
         listencount = len(recent)
         i = 0
         while i < (listencount-1):
             if recent[i][0].find(self._artist) > -1:
                 if recent[i+1][0].find(self._artist) > -1:
-                    song1 = (recent[i][0] + ", " + recent[i][1]).replace("'","''")
-                    artist1 = recent[i][0].replace("'","''")
+                    artist1 = self.correctartist(recent[i][0].replace("'","''"))
+                    #track1 = self.correctartist(recent[i][1]).replace("'","''")
+                    #artist1 = recent[i][0].replace("'","''")
                     track1 = recent[i][1].replace("'","''")
+                    song1 = (artist1 + ", " + track1)
 
-                    song2 = (recent[i+1][0] + ", " + recent[i+1][1]).replace("'","''")
-                    artist2 = recent[i+1][0].replace("'","''")
+                    artist2 = self.correctartist(recent[i+1][0].replace("'","''"))
+                    #track2 = self.correctartist(recent[i+1][1]).replace("'","''")
+                    #artist2 = recent[i+1][0].replace("'","''")
                     track2 = recent[i+1][1].replace("'","''")
+                    song2 = (artist2 + ", " + track2)
 
                     a = cmp(song1, song2)
                     if a < 0:
@@ -167,7 +236,7 @@ class parser:
             i = i + 1
 
     def parsecache(self, _artist):
-        self._artist = _artist
+        self._artist = self.correctartist(_artist)
         allusers = glob.glob(self.cachedir+"user cache/*.txt")
         recent = []
         playcounts = {}
@@ -190,7 +259,7 @@ class parser:
         self.sendtodb(recent)
 
     def dynamicplaylist(self, _artist, _song):
-        _artist = _artist.replace("'","''")
+        _artist = self.correctartist(_artist.replace("'","''"))
         _song = _song.replace("'","''")
         self._artist = _artist
         self._song = _song
@@ -208,11 +277,12 @@ class parser:
         return npl
 
 if __name__ == "__main__":
-    _artist = "Die Antwoord"
-    _song = "Obama BasedGod"
+    _artist = 'Lil B "The BasedGod"'
+    _song = "I Own Swag"
     np = parser("")
-    #np.sqlcreatedb()
-    np.parsecache(_artist)
+    print np.correctartist(_artist)
+    np.sqlcreatedb()
+    #np.parsecache(_artist)
     newplaylist = np.dynamicplaylist(_artist, _song)
     for item in newplaylist:
         print item[0],item[1]

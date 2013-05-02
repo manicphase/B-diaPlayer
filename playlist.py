@@ -33,7 +33,7 @@ class ListBox(wx.Frame):
 
         self.listctrl = wx.ListCtrl(panel, -1, style=wx.LC_REPORT)
         self.listctrl.InsertColumn(0, 'Artist', width=100)
-        self.listctrl.InsertColumn(1, 'Song', 180)
+        self.listctrl.InsertColumn(1, 'Song', width = 160)
         lbox.Add(self.listctrl, 1, wx.EXPAND | wx.ALL, 5)
 
         btnPanel = wx.Panel(panel, -1)
@@ -91,16 +91,20 @@ class ListBox(wx.Frame):
     def OnPlay(self, event):
         self.mediaplayer.Stop()
         sel = self.currenttrack
+        print "sel:", sel
         if sel < 0:
             sel = 0
         path = ""
+        if sel >= self.listctrl.GetItemCount():
+            sel = 0
         while sel < self.listctrl.GetItemCount():
-            artist = self.listctrl.GetItem(self.currenttrack,0).GetText()
-            track = self.listctrl.GetItem(self.currenttrack,1).GetText()
+            artist = self.listctrl.GetItem(sel,0).GetText()
+            track = self.listctrl.GetItem(sel,1).GetText()
             label = "Now Playing: " + artist + ", " + track
             print label
             self.playinglabel.SetLabel(label)
             path = self.sp.getfile(artist, track)
+            print "path", sel, path
             if len(path) > 1:
                 break
             else:
@@ -145,19 +149,21 @@ class ListBox(wx.Frame):
         artist = self.listctrl.GetItem(self.currenttrack,0).GetText()
         track = self.listctrl.GetItem(self.currenttrack,1).GetText()
         path = self.sp.getfile(artist, track)
-        self.OnPlay(event)
-        self.listbox.Delete(0)
         if self.dynamicpl.GetValue():
             self.currenttrack = 0
+            self.OnPlay(event)
+            print "dynamic", self.currenttrack
             self.FindSimilar(event)
         else:
-            self.currenttrack = self.currenttrack + 1
+            self.OnPlay(event)
+            #self.currenttrack = self.currenttrack + 1
 
 
     def AddFilePointer(self, path):
         sp = songpointers.SongPointers()
         deets = id3reader.Reader(path)
         artist = deets.getValue("performer")
+        artist = self.lfm.correctartist(artist)
         track = deets.getValue("title")
         sp.addfile(artist, track, path)
 
@@ -168,7 +174,9 @@ class ListBox(wx.Frame):
     def GetId3(self, path):
         deets = id3reader.Reader(path)
         artist = deets.getValue("performer")
+        artist = self.lfm.correctartist(artist)
         track = deets.getValue("title")
+        track = self.lfm.correcttrack(artist, track)
         s = [artist,track]
         return s
 
@@ -208,7 +216,7 @@ class ListBox(wx.Frame):
         track = self.listctrl.GetItem(self.currenttrack,1).GetText()
         self.listctrl.ClearAll()
         self.listctrl.InsertColumn(0, 'Artist', width=100)
-        self.listctrl.InsertColumn(1, 'Song', 90)
+        self.listctrl.InsertColumn(1, 'Song', width = 160)
         playlist = self.lfm.dynamicplaylist(artist, track)
         for item in playlist:
             index = self.listctrl.InsertStringItem(sys.maxint, item[1])
